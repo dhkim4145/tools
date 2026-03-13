@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PC 실사·실사결과 | 업무 분석 도구</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="../css/common.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    .asset-sub-nav { background:#fff; padding:0 24px; height:48px; display:flex; align-items:center; gap:4px; box-shadow:0 1px 4px rgba(0,0,0,0.08); border-bottom:1px solid #d1d9e6; }
+    .asset-sub-tab { padding:10px 20px; border:none; background:transparent; color:#6b7280; font-size:0.9rem; cursor:pointer; border-radius:8px; font-family:inherit; }
+    .asset-sub-tab:hover { background:#f3f4f6; color:#1a3a6b; }
+    .asset-sub-tab.active { background:#1a3a6b; color:#fff; font-weight:600; }
+    .asset-sub-panel { display:none; }
+    .asset-sub-panel.active { display:block; }
+  </style>
+  <style>
+    #app-asset { --bg:#f0f2f5;--surface:#fff;--primary:#1a3a6b;--primary-light:#2854a0;--accent:#e85d26;--text:#1a1a2e;--text-muted:#6b7280;--border:#d1d9e6;--row-even:#f7f9fc;--row-hover:#e8f0fe;--shadow:0 4px 24px rgba(26,58,107,0.10);--red:#dc2626;--red-bg:#fef2f2;--red-border:#fca5a5;--orange:#ea580c;--orange-bg:#fff7ed;--green:#16a34a;--green-bg:#f0fdf4;--green-border:#86efac; font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh; }
+    #app-asset .asset-header { background:var(--primary);color:#fff;padding:0 40px;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 2px 12px rgba(0,0,0,0.18); }
+    #app-asset .asset-header h2 { font-size:1.18rem;font-weight:700; }
+    #app-asset main { max-width:1400px;margin:0 auto;padding:28px 24px 60px; }
+    #app-asset .title-bar { display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px; }
+    #app-asset .title-bar h2 { font-size:1.5rem;font-weight:700;color:var(--primary); }
+    #app-asset .meta { font-size:0.82rem;color:var(--text-muted);text-align:right;line-height:1.7; }
+    #app-asset #assetSummaryCards { display:none;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px; }
+    #app-asset #assetSummaryCards.visible { display:grid; }
+    #app-asset .card { background:var(--surface);border-radius:12px;padding:16px 20px;box-shadow:var(--shadow);border-left:4px solid transparent;display:flex;flex-direction:column;gap:4px; }
+    #app-asset .card-label { font-size:0.78rem;color:var(--text-muted);font-weight:500; }
+    #app-asset .card-value { font-size:1.8rem;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1; }
+    #app-asset .card-sub { font-size:0.75rem;color:var(--text-muted); }
+    #app-asset .card.total { border-color:var(--primary); } #app-asset .card.total .card-value { color:var(--primary); }
+    #app-asset .card.danger { border-color:var(--red); } #app-asset .card.danger .card-value { color:var(--red); }
+    #app-asset .card.warn { border-color:var(--orange); } #app-asset .card.warn .card-value { color:var(--orange); }
+    #app-asset .card.safe { border-color:var(--green); } #app-asset .card.safe .card-value { color:var(--green); }
+    #app-asset #assetUploadZone { border:2.5px dashed var(--border);border-radius:16px;background:var(--surface);padding:60px 40px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:20px;box-shadow:var(--shadow); }
+    #app-asset #assetUploadZone:hover,#app-asset #assetUploadZone.dragover { border-color:var(--primary-light);background:#edf2fb; }
+    #app-asset #assetFileInput { display:none; }
+    #app-asset .status { padding:10px;margin-bottom:12px;border-radius:8px; }
+    #app-asset .status.info { background:#e8f4f8;color:#0c5460; }
+    #app-asset .loading { display:inline-block;width:20px;height:20px;border:3px solid #f3f3f3;border-top:3px solid #1a3a6b;border-radius:50%;animation:spin 1s linear infinite;margin-left:8px;vertical-align:middle; }
+    @keyframes spin { 0%{transform:rotate(0deg)}100%{transform:rotate(360deg)} }
+    #app-asset #assetToolbar { display:none;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px; }
+    #app-asset #assetToolbar.visible { display:flex; }
+    #app-asset .search-wrap { position:relative;flex:1;min-width:180px;max-width:280px; }
+    #app-asset .search-wrap input { width:100%;padding:9px 14px 9px 38px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem; }
+    #app-asset select { padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:0.84rem;background:var(--surface);cursor:pointer; }
+    #app-asset .btn { padding:9px 16px;border-radius:8px;font-size:0.84rem;font-weight:600;cursor:pointer;border:none; }
+    #app-asset .btn-primary { background:var(--primary);color:#fff; }
+    #app-asset .btn-outline { background:#fff;color:var(--primary);border:1.5px solid var(--primary); }
+    #app-asset .btn-accent { background:var(--accent);color:#fff; }
+    #app-asset #assetTableWrap { display:none;background:var(--surface);border-radius:14px;box-shadow:var(--shadow);overflow:hidden; }
+    #app-asset #assetTableWrap.visible { display:block; }
+    #app-asset .table-scroll { overflow-x:auto; }
+    #app-asset #assetMainTable { width:100%;border-collapse:collapse;font-size:0.84rem; }
+    #app-asset #assetMainTable thead tr { background:var(--primary);color:#fff; }
+    #app-asset #assetMainTable thead th { padding:12px 13px;text-align:center;font-weight:600;white-space:nowrap;position:sticky;top:0;z-index:2; }
+    #app-asset #assetMainTable tbody tr { border-bottom:1px solid var(--border);cursor:pointer; }
+    #app-asset #assetMainTable tbody tr:nth-child(even) { background:var(--row-even); }
+    #app-asset #assetMainTable tbody tr:hover { background:var(--row-hover); }
+    #app-asset #assetMainTable tbody tr.row-danger { background:#fff5f5 !important; }
+    #app-asset #assetMainTable tbody tr.row-warn { background:#fffbf5 !important; }
+    #app-asset #assetMainTable tbody td { padding:10px 13px;text-align:center;vertical-align:middle;white-space:nowrap; }
+    #app-asset #assetMainTable tbody td.left { text-align:left; }
+    #app-asset .badge { display:inline-block;padding:2px 9px;border-radius:12px;font-size:0.75rem;font-weight:600; }
+    #app-asset .badge-win11 { background:#dbeafe;color:#1d4ed8; }
+    #app-asset .badge-win10 { background:#fee2e2;color:#991b1b; }
+    #app-asset .badge-other { background:#f3e8ff;color:#6b21a8; }
+    #app-asset .status-badge { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:0.74rem;font-weight:700; }
+    #app-asset .status-danger { background:var(--red-bg);color:var(--red);border:1px solid var(--red-border); }
+    #app-asset .status-warn { background:var(--orange-bg);color:var(--orange);border:1px solid #fdba74; }
+    #app-asset .status-safe { background:var(--green-bg);color:var(--green);border:1px solid var(--green-border); }
+    #app-asset .score-wrap { display:flex;align-items:center;gap:6px;justify-content:center; }
+    #app-asset .score-bar { width:48px;height:6px;background:#e5e7eb;border-radius:4px;overflow:hidden; }
+    #app-asset .score-fill { height:100%;border-radius:4px; }
+    #app-asset .sign-box { width:80px;height:28px;border-bottom:1.5px solid #aaa;display:inline-block; }
+    #app-asset .table-footer { padding:12px 20px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);font-size:0.79rem;color:var(--text-muted); }
+    #app-asset .count-badge { margin-left:auto;background:var(--primary);color:#fff;border-radius:20px;padding:5px 14px;font-size:0.82rem;font-weight:600; }
+    #app-asset .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(3px); }
+    #app-asset .modal-overlay.open { display:flex; }
+    #app-asset .modal { background:#fff;border-radius:18px;width:580px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+    #app-asset .modal-header { padding:22px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:#fff;z-index:5; }
+    #app-asset .modal-title { font-size:1rem;font-weight:700;color:var(--primary); }
+    #app-asset .modal-subtitle { font-size:0.79rem;color:var(--text-muted);margin-top:3px; }
+    #app-asset .modal-close { width:30px;height:30px;border-radius:50%;border:none;background:#f3f4f6;cursor:pointer; }
+    #app-asset .modal-score-bar { margin:14px 24px 0;background:#f8f9fa;border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between; }
+    #app-asset .modal-body { padding:16px 24px 8px; }
+    #app-asset .modal-footer { padding:14px 24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;position:sticky;bottom:0;background:#fff; }
+    #app-asset .modal-result { font-size:0.85rem;font-weight:700;padding:6px 14px;border-radius:8px; }
+    #app-asset .result-danger { background:var(--red-bg);color:var(--red); }
+    #app-asset .result-warn { background:var(--orange-bg);color:var(--orange); }
+    #app-asset .result-safe { background:var(--green-bg);color:var(--green); }
+    #app-asset .check-section { margin-bottom:16px; }
+    #app-asset .check-section-title { font-size:0.76rem;font-weight:700;color:var(--text-muted);margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border); }
+    #app-asset .check-item { display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:8px;margin-bottom:3px;border:1.5px solid transparent;cursor:pointer;transition:all 0.15s; }
+    #app-asset .check-item:hover { background:#f9fafb;border-color:var(--border); }
+    #app-asset .check-item.checked { background:#fef2f2;border-color:var(--red-border); }
+    #app-asset .check-item.checked .check-label { color:var(--red);font-weight:600; }
+    #app-asset .check-label { font-size:0.85rem;flex:1;line-height:1.4; }
+    #app-asset .check-sub { font-size:0.73rem;color:var(--text-muted);display:block;margin-top:2px; }
+    #app-asset .check-pts { font-size:0.7rem;font-weight:700;padding:1px 7px;border-radius:8px;background:#f3f4f6;color:var(--text-muted);flex-shrink:0;margin-top:2px; }
+    #app-asset .check-item.checked .check-pts { background:var(--red-bg);color:var(--red); }
+    #assetPrintChecklist { display:none; }
+    body.asset-print-checklist-mode * { visibility:hidden; }
+    body.asset-print-checklist-mode #assetPrintChecklist, body.asset-print-checklist-mode #assetPrintChecklist * { visibility:visible; }
+    body.asset-print-checklist-mode #assetPrintChecklist { position:absolute;left:0;top:0;width:100%;display:block!important;background:#fff;padding:12px 4px 12px 12px;font-size:11px;font-family:'Noto Sans KR',sans-serif; }
+    #assetPrintChecklist .pcl-suptitle { font-size:11px;color:#888;margin-bottom:4px; }
+    #assetPrintChecklist .pcl-title { font-size:20px;font-weight:bold;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #222; }
+    #assetPrintChecklist .pcl-info-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:4px 20px;margin-bottom:10px;font-size:12px;color:#444; }
+    #assetPrintChecklist .pcl-verdict-line { margin-bottom:14px;font-weight:700;font-size:14px; }
+    #assetPrintChecklist .pcl-table { width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;margin-bottom:16px;table-layout:fixed;box-sizing:border-box; }
+    #assetPrintChecklist .pcl-table th,#assetPrintChecklist .pcl-table td { border:1px solid #333;padding:5px 6px;text-align:left;vertical-align:middle;word-break:keep-all; }
+    #assetPrintChecklist .pcl-table th:first-child,#assetPrintChecklist .pcl-table td:first-child { border-left:none; }
+    #assetPrintChecklist .pcl-table th:last-child,#assetPrintChecklist .pcl-table td:last-child { border-right:none; }
+    #assetPrintChecklist .pcl-table th { background:#eef2f7;font-weight:700;font-size:11px;text-align:center; }
+    #assetPrintChecklist .pcl-table col.col-gubun { width:60px; } #assetPrintChecklist .pcl-table col.col-label { width:120px; } #assetPrintChecklist .pcl-table col.col-crit { width:260px; } #assetPrintChecklist .pcl-table col.col-check { width:34px; } #assetPrintChecklist .pcl-table col.col-score { width:34px; }
+    #assetPrintChecklist .pcl-table td.col-check,#assetPrintChecklist .pcl-table td.col-score,#assetPrintChecklist .pcl-table th.col-check,#assetPrintChecklist .pcl-table th.col-score { text-align:center;padding:5px 4px;overflow:hidden; }
+    #assetPrintChecklist .pcl-table td:nth-child(3) { word-break:break-all;white-space:normal; }
+    #assetPrintChecklist .pcl-table .pcl-total { font-weight:700;background:#f5f5f5;border-top:2px solid #222; }
+    #assetPrintChecklist .pcl-table .pcl-total td { border-top:2px solid #222; }
+    #assetPrintChecklist .pcl-footer { font-size:11px;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid #ccc;line-height:2; }
+    #assetPrintChecklist .pcl-sign-line { display:inline-block;min-width:130px;border-bottom:1px solid #333;margin-left:4px;vertical-align:middle; }
+    #assetPrintChecklist .pcl-sign-line.pcl-date { min-width:100px; }
+    @page { margin:10mm 5mm 10mm 8mm; size:A4 portrait; }
+    @media print {
+      body.asset-print-checklist-mode .app-nav, body.asset-print-checklist-mode .asset-sub-nav, body.asset-print-checklist-mode #app-asset, body.asset-print-checklist-mode #app-asset-view, body.asset-print-checklist-mode .modal-overlay { display:none!important; }
+      body.asset-print-checklist-mode #assetPrintChecklist { display:block!important;position:static!important;padding:10px 4px 10px 10px;visibility:visible!important; }
+      body.asset-print-checklist-mode #assetPrintChecklist * { visibility:visible!important; }
+      body.asset-print-checklist-mode #assetPrintChecklist .pcl-table { border-collapse:collapse!important;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+      body.asset-print-checklist-mode #assetPrintChecklist .pcl-table th, body.asset-print-checklist-mode #assetPrintChecklist .pcl-table td { border:1px solid #333!important; }
+      body.asset-print-checklist-mode #assetPrintChecklist .pcl-table th:first-child, body.asset-print-checklist-mode #assetPrintChecklist .pcl-table td:first-child { border-left:none!important; }
+      body.asset-print-checklist-mode #assetPrintChecklist .pcl-table th:last-child, body.asset-print-checklist-mode #assetPrintChecklist .pcl-table td:last-child { border-right:none!important; }
+      body.asset-print-checklist-mode #assetPrintChecklist .pcl-table th { background:#eef2f7!important;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+      body.asset-print-checklist-mode #assetPrintChecklist .pcl-table .pcl-total td { background:#f5f5f5!important;border-top:2px solid #222!important;-webkit-print-color-adjust:exact;print-color-adjust:exact; }
+    }
+    #app-asset-view .asset-view-upload { border:2.5px dashed #d1d9e6;border-radius:16px;background:#fff;padding:60px 40px;text-align:center;cursor:pointer;transition:all 0.2s;margin-bottom:20px;box-shadow:0 4px 24px rgba(26,58,107,0.1); }
+    #app-asset-view .asset-view-upload:hover,#app-asset-view .asset-view-upload.dragover { border-color:#2854a0;background:#edf2fb; }
+    #app-asset-view .asset-view-upload p { color:#6b7280;font-size:1rem; }
+    #app-asset-view .asset-view-upload strong { color:#1a3a6b; }
+    #app-asset-view .asset-view-cards { display:none;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px; }
+    #app-asset-view .asset-view-cards.visible { display:grid; }
+    #app-asset-view .asset-view-cards .card { background:#fff;border-radius:12px;padding:16px 20px;box-shadow:0 4px 24px rgba(26,58,107,0.1);border-left:4px solid transparent;display:flex;flex-direction:column;gap:4px; }
+    #app-asset-view .asset-view-cards .card-label { font-size:0.78rem;color:#6b7280;font-weight:500; }
+    #app-asset-view .asset-view-cards .card-value { font-size:1.8rem;font-weight:700;font-family:'JetBrains Mono',monospace; }
+    #app-asset-view .asset-view-cards .card.total { border-color:#1a3a6b; } #app-asset-view .asset-view-cards .card.total .card-value { color:#1a3a6b; }
+    #app-asset-view .asset-view-cards .card.danger { border-color:#dc2626; } #app-asset-view .asset-view-cards .card.danger .card-value { color:#dc2626; }
+    #app-asset-view .asset-view-cards .card.warn { border-color:#ea580c; } #app-asset-view .asset-view-cards .card.warn .card-value { color:#ea580c; }
+    #app-asset-view .asset-view-cards .card.safe { border-color:#16a34a; } #app-asset-view .asset-view-cards .card.safe .card-value { color:#16a34a; }
+    #app-asset-view .asset-view-toolbar { display:none;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px; }
+    #app-asset-view .asset-view-toolbar.visible { display:flex; }
+    #app-asset-view .asset-view-toolbar .btn { padding:8px 14px;border-radius:8px;font-size:0.84rem;font-weight:600;cursor:pointer;border:none;font-family:'Noto Sans KR',sans-serif; }
+    #app-asset-view .asset-view-toolbar .btn-outline { background:#fff;color:#1a3a6b;border:1.5px solid #1a3a6b; }
+    #app-asset-view .asset-view-toolbar .btn-outline:hover { background:#e8f0fe; }
+    #app-asset-view .asset-view-toolbar select { padding:9px 11px;border:1.5px solid #d1d9e6;border-radius:8px;font-size:0.84rem;background:#fff;cursor:pointer; }
+    #app-asset-view .asset-view-table-wrap { display:none;background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(26,58,107,0.1);overflow:hidden; }
+    #app-asset-view .asset-view-table-wrap.visible { display:block; }
+    #app-asset-view .asset-view-table-wrap table { width:100%;border-collapse:collapse;font-size:0.84rem; }
+    #app-asset-view .asset-view-table-wrap thead tr { background:#1a3a6b;color:#fff; }
+    #app-asset-view .asset-view-table-wrap thead th { padding:12px 13px;text-align:center;font-weight:600;font-size:0.81rem;white-space:nowrap; }
+    #app-asset-view .asset-view-table-wrap tbody tr { border-bottom:1px solid #d1d9e6; }
+    #app-asset-view .asset-view-table-wrap tbody tr:nth-child(even) { background:#f7f9fc; }
+    #app-asset-view .asset-view-table-wrap tbody tr:hover { background:#e8f0fe; }
+    #app-asset-view .asset-view-table-wrap tbody tr.row-danger { background:#fff5f5!important; }
+    #app-asset-view .asset-view-table-wrap tbody tr.row-warn { background:#fffbf5!important; }
+    #app-asset-view .asset-view-table-wrap tbody td { padding:10px 13px;text-align:center;vertical-align:middle;white-space:nowrap; }
+    #app-asset-view .asset-view-table-wrap tbody td.left { text-align:left; }
+    #app-asset-view .status-badge { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:0.74rem;font-weight:700; }
+    #app-asset-view .status-danger { background:#fef2f2;color:#dc2626;border:1px solid #fca5a5; }
+    #app-asset-view .status-warn { background:#fff7ed;color:#ea580c;border:1px solid #fdba74; }
+    #app-asset-view .status-safe { background:#f0fdf4;color:#16a34a;border:1px solid #86efac; }
+    #app-asset-view .table-footer { padding:12px 20px;border-top:1px solid #d1d9e6;font-size:0.79rem;color:#6b7280; }
+    #app-asset-view .asset-view-inner { max-width:1400px;margin:0 auto; }
+    #app-asset-view .asset-view-title { font-size:1.5rem;font-weight:700;color:#1a3a6b;margin-bottom:16px; }
+    #app-asset-view .empty-row td { text-align:center;padding:24px;color:#6b7280; }
+    @media (max-width:768px) { #app-asset #assetSummaryCards.visible { grid-template-columns:repeat(2,1fr); } #app-asset-view .asset-view-cards.visible { grid-template-columns:repeat(2,1fr); } }
+  </style>
+</head>
+<body style="margin:0;font-family:'Noto Sans KR',sans-serif;">
+<a href="#app-asset" class="skip-link">본문으로 건너뛰기</a>
+<nav class="app-nav" role="navigation">
+  <h1>업무 분석 도구</h1>
+  <div class="nav-links">
+    <a href="../" class="nav-link">홈</a>
+    <a href="../account/" class="nav-link">계정과목 증감 분석</a>
+    <a href="./" class="nav-link active" aria-current="page">PC 실사·실사결과</a>
+    <a href="../policy/" class="nav-link">보안문서 검색</a>
+  </div>
+</nav>
+<div class="asset-sub-nav" role="tablist">
+  <button type="button" class="asset-sub-tab active" role="tab" aria-selected="true" data-subpanel="asset">PC 실사대장</button>
+  <button type="button" class="asset-sub-tab" role="tab" aria-selected="false" data-subpanel="asset-view">실사 결과 조회</button>
+</div>
+<div id="app-asset" class="asset-sub-panel active">
+  <header class="asset-header">
+    <h2>🖥️ IT 자산 실사대장</h2>
+    <span id="assetTodayLabel"></span>
+    <button type="button" id="assetGoToAssetView" style="font-size:0.88rem;color:rgba(255,255,255,0.9);background:rgba(255,255,255,0.15);border:none;padding:8px 14px;border-radius:8px;cursor:pointer;">📊 실사 결과 조회</button>
+  </header>
+  <main>
+    <div class="title-bar">
+      <h2>PC 실사 체크리스트<span id="assetDeptLabel" style="font-size:0.9rem;font-weight:400;color:var(--text-muted);margin-left:10px;"></span></h2>
+      <div class="meta">작성일자 : <b id="assetDateStr">-</b><br>담당자 : <b>___________</b></div>
+    </div>
+    <div id="assetSummaryCards">
+      <div class="card total"><span class="card-label">전체 장비</span><span class="card-value" id="assetCardTotal">0</span><span class="card-sub">대</span></div>
+      <div class="card danger"><span class="card-label">⚠ 교체권고</span><span class="card-value" id="assetCardDanger">0</span><span class="card-sub">대 (즉시 검토)</span></div>
+      <div class="card warn"><span class="card-label">🔶 모니터링</span><span class="card-value" id="assetCardWarn">0</span><span class="card-sub">대 (주의 관찰)</span></div>
+      <div class="card safe"><span class="card-label">✅ 정상</span><span class="card-value" id="assetCardSafe">0</span><span class="card-sub">대</span></div>
+    </div>
+    <div id="assetUploadZone" onclick="document.getElementById('assetFileInput').click()">
+      <p style="font-size:2rem;margin-bottom:12px;">📂</p>
+      <p><strong>엑셀 파일을 클릭하거나 드래그하여 업로드</strong></p>
+      <p style="margin-top:6px;font-size:0.85rem;color:#6b7280;">.xlsx / .xls 형식 지원 · 헤더 행 자동 감지</p>
+    </div>
+    <input type="file" id="assetFileInput" accept=".xlsx,.xls">
+    <p id="assetToolbarHint" style="display:none;margin-bottom:8px;font-size:0.85rem;color:#6b7280;">💡 체크 후 「저장 후 닫기」→ 완료 후 「엑셀 내보내기」로 저장하세요. &nbsp;|&nbsp; 1개 선택 후 🖨 인쇄 시 해당 PC 체크리스트만 출력됩니다.</p>
+    <div id="assetToolbar">
+      <div class="search-wrap"><input type="text" id="assetSearchInput" placeholder="이름·IP·부서 검색…"></div>
+      <select id="assetDeptFilter"><option value="">전체 부서</option></select>
+      <select id="assetOsFilter"><option value="">전체 OS</option><option value="Win11">Win11</option><option value="Win10">Win10</option></select>
+      <select id="assetYearsFilter"><option value="">전체 사용년수</option><option value="5" selected>5년 이상</option><option value="3">3년 이상</option><option value="7">7년 이상</option></select>
+      <select id="assetStatusFilter"><option value="">전체 상태</option><option value="danger">교체권고</option><option value="warn">모니터링</option><option value="safe">정상</option></select>
+      <button class="btn btn-outline" type="button" id="assetFilterReset">필터 초기화</button>
+      <button class="btn btn-outline" type="button" id="assetReuploadBtn">📂 다른 파일 분석하기</button>
+      <button class="btn btn-outline" type="button" id="assetToggleAll">☑ 전체 선택/해제</button>
+      <button class="btn btn-accent" type="button" id="assetPrint">🖨 인쇄</button>
+      <button class="btn btn-primary" type="button" id="assetExportExcel">📥 엑셀 내보내기</button>
+      <span id="assetExportToast" style="display:none;font-size:0.8rem;color:#1a3a6b;margin-left:8px;"></span>
+      <span class="count-badge" id="assetCountBadge">0건</span>
+    </div>
+    <div id="assetTableWrap">
+      <div class="table-scroll">
+        <table id="assetMainTable">
+          <thead><tr><th style="width:44px;">확인</th><th style="width:44px;">No.</th><th>부서</th><th>사용자명</th><th>IP</th><th>제조연월</th><th>사용년수</th><th>구분</th><th>운영체제</th><th>교체점수</th><th>판정</th><th>실사 서명</th><th>비고</th></tr></thead>
+          <tbody id="assetTableBody"></tbody>
+        </table>
+      </div>
+      <div class="table-footer"><span id="assetFooterInfo">총 0건</span><span>💡 행을 클릭하면 교체 체크리스트를 확인할 수 있습니다</span></div>
+    </div>
+  </main>
+  <div class="modal-overlay" id="assetModalOverlay" role="dialog" aria-modal="true" aria-labelledby="assetModalTitle" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div><div class="modal-title" id="assetModalTitle">노트북 교체 체크리스트</div><div class="modal-subtitle" id="assetModalSubtitle"></div></div>
+        <button class="modal-close" type="button" id="assetModalClose">✕</button>
+      </div>
+      <div class="modal-score-bar">
+        <div><div style="font-size:0.8rem;color:#6b7280;">교체 종합점수</div><div id="assetModalScoreVal" style="font-size:1.5rem;font-weight:700;font-family:'JetBrains Mono',monospace;">0점</div><div style="font-size:0.72rem;color:#6b7280;margin-top:4px;">🟢 4점 이하 : 정상 &nbsp;|&nbsp; 🟠 5~7점 : 모니터링 &nbsp;|&nbsp; 🔴 7점 이상 : 교체권고</div></div>
+        <div id="assetModalVerdict" class="modal-result result-safe">판정 중…</div>
+      </div>
+      <div class="modal-body" id="assetModalBody">
+        <div class="check-section"><div class="check-section-title">📋 기본</div><label class="check-item" id="assetCiYears"><input type="checkbox"><div class="check-label">사용기간 5년 이상<span class="check-sub">사용년수 기준 자동 체크됩니다 (수정 가능)</span></div><span class="check-pts">+3점</span></label></div>
+        <div class="check-section"><div class="check-section-title">⚡ 안정성 / 장애</div>
+          <label class="check-item"><input type="checkbox"><div class="check-label">전원/부팅 문제<span class="check-sub">부팅불가, 전원꺼짐/재부팅 반복, Windows 진입불가</span></div><span class="check-pts">+2점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">시스템 크래시 반복<span class="check-sub">프리징/블루스크린 월 2회↑ 또는 업무 1시간↑ 중단</span></div><span class="check-pts">+2점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">주요부품 고장<span class="check-sub">CPU/GPU/SSD/RAM/FAN 등 주요부품 고장 진단</span></div><span class="check-pts">+2점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">동일장애 재발<span class="check-sub">수리 후 30~60일 내 재발 또는 동일 증상 2회↑</span></div><span class="check-pts">+2점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">발열/소음 과다<span class="check-sub">과열로 스로틀링 발생/자동 종료, 팬 소음 과다</span></div><span class="check-pts">+1점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">입출력/디스플레이 불량<span class="check-sub">키보드·터치패드·포트·화면출력 불량 (업무 지장 수준)</span></div><span class="check-pts">+1점</span></label></div>
+        <div class="check-section"><div class="check-section-title">🔋 배터리 안전</div>
+          <label class="check-item"><input type="checkbox"><div class="check-label">실사용 시간 2시간 미만<span class="check-sub">완충 후 실사용 시간 2시간 미만</span></div><span class="check-pts">+1점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">배터리 물리적 이상 ⚠ 안전위험<span class="check-sub">배터리 팽창, 이상 발열, 충전 끊김</span></div><span class="check-pts">+3점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">배터리 충전 불가<span class="check-sub">배터리 충전 문제 (충전 안됨) 발생</span></div><span class="check-pts">+2점</span></label></div>
+        <div class="check-section"><div class="check-section-title">🚀 성능</div>
+          <label class="check-item" id="assetCiOs"><input type="checkbox"><div class="check-label">OS 지원 종료 예정 — Win10<span class="check-sub">2025년 10월 Windows 10 공식 지원 종료 · 보안 위험</span></div><span class="check-pts">+3점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">멀티태스킹 업무불가<span class="check-sub">Office/브라우저 동시 사용 시 업무불가 상태 2주↑ 지속</span></div><span class="check-pts">+2점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">화상회의 끊김 반복<span class="check-sub">Teams/Zoom/Webex 끊김 반복 (네트워크 문제 제외)</span></div><span class="check-pts">+1점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">저장공간 부족 지속<span class="check-sub">여유공간 상시 부족, 정리 후에도 체감 성능 저하 지속</span></div><span class="check-pts">+1점</span></label></div>
+        <div class="check-section"><div class="check-section-title">💰 경제성</div>
+          <label class="check-item"><input type="checkbox"><div class="check-label">수리비 ≥ 신규가의 50%<span class="check-sub">예상 수리비가 동급 신규 제품 가격의 50% 이상</span></div><span class="check-pts">+2점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">수리 리드타임 5영업일 초과<span class="check-sub">부품/센터 이슈로 5영업일↑ 예상</span></div><span class="check-pts">+1점</span></label>
+          <label class="check-item"><input type="checkbox"><div class="check-label">반복 유상수리 누적<span class="check-sub">연간 유상 수리비 누적 ≥ 구매가의 20~30%</span></div><span class="check-pts">+2점</span></label></div>
+      </div>
+      <div class="modal-footer"><div id="assetModalFooterResult" class="modal-result result-safe">-</div><div style="display:flex;gap:8px;"><button class="btn btn-outline" type="button" id="assetResetChecks">초기화</button><button class="btn btn-primary" type="button" id="assetSaveAndClose">저장 후 닫기</button></div></div>
+    </div>
+  </div>
+</div>
+<div id="app-asset-view" class="asset-sub-panel" style="padding:20px;background:#f0f2f5;">
+  <div class="asset-view-inner">
+    <h2 class="asset-view-title">내보낸 실사결과 파일을 업로드하면 통계와 목록을 조회할 수 있습니다</h2>
+    <div id="assetViewUploadZone" class="asset-view-upload">
+      <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="#1a3a6b" stroke-width="1.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M8 12H4a2 2 0 00-2 2v4"/></svg>
+      <p><strong>PC실사결과 엑셀 파일을 클릭하거나 드래그하여 업로드</strong></p>
+      <p style="margin-top:6px;font-size:0.85rem;color:#6b7280;">엑셀 내보내기로 저장한 .xlsx 형식</p>
+    </div>
+    <input type="file" id="assetViewFileInput" accept=".xlsx,.xls" style="display:none;">
+    <div id="assetViewSummaryCards" class="asset-view-cards">
+      <div class="card total"><span class="card-label">전체 장비</span><span class="card-value" id="assetViewCardTotal">0</span><span class="card-sub">대</span></div>
+      <div class="card danger"><span class="card-label">⚠ 교체권고</span><span class="card-value" id="assetViewCardDanger">0</span><span class="card-sub">대</span></div>
+      <div class="card warn"><span class="card-label">🔶 모니터링</span><span class="card-value" id="assetViewCardWarn">0</span><span class="card-sub">대</span></div>
+      <div class="card safe"><span class="card-label">✅ 정상</span><span class="card-value" id="assetViewCardSafe">0</span><span class="card-sub">대</span></div>
+    </div>
+    <div id="assetViewToolbar" class="asset-view-toolbar">
+      <button type="button" id="assetViewReuploadBtn" class="btn btn-outline" style="font-size:0.84rem;padding:8px 14px;">📂 다른 파일 분석하기</button>
+      <select id="assetViewDeptFilter"><option value="">전체 부서</option></select>
+      <select id="assetViewStatusFilter"><option value="">전체 판정</option><option value="danger">교체권고</option><option value="warn">모니터링</option><option value="safe">정상</option></select>
+      <span class="count-badge" id="assetViewCountBadge">0건</span>
+    </div>
+    <div id="assetViewTableWrap" class="asset-view-table-wrap">
+      <div class="table-scroll">
+        <table><thead><tr><th style="width:44px;">No.</th><th>부서</th><th>사용자명</th><th>IP</th><th>사용년수</th><th>운영체제</th><th>교체점수</th><th>판정</th></tr></thead><tbody id="assetViewTableBody"></tbody></table>
+      </div>
+      <div class="table-footer"><span id="assetViewFooterInfo">총 0건</span></div>
+    </div>
+  </div>
+</div>
+<div id="assetPrintChecklist"></div>
+<script src="../js/common.js"></script>
+<script>
+const ASSET_PRINT_ITEMS=[{gubun:'기본',label:'사용기간 5년 이상',criteria:'사용년수 기준 자동 체크 (수정 가능)',pts:3},{gubun:'안정성/장애',label:'전원/부팅 문제',criteria:'부팅불가, 전원꺼짐/재부팅 반복, Windows 진입불가',pts:2},{gubun:'안정성/장애',label:'시스템 크래시 반복',criteria:'프리징/블루스크린 월 2회↑ 또는 업무 1시간↑ 중단',pts:2},{gubun:'안정성/장애',label:'주요부품 고장',criteria:'CPU/GPU/SSD/RAM/FAN 등 주요부품 고장 진단',pts:2},{gubun:'안정성/장애',label:'동일장애 재발',criteria:'수리 후 30~60일 내 재발 또는 동일 증상 2회↑',pts:2},{gubun:'안정성/장애',label:'발열/소음 과다',criteria:'과열로 스로틀링 발생/자동 종료, 팬 소음 과다',pts:1},{gubun:'안정성/장애',label:'입출력/디스플레이 불량',criteria:'키보드·터치패드·포트·화면출력 불량 (업무 지장 수준)',pts:1},{gubun:'배터리/안전',label:'실사용 시간 2시간 미만',criteria:'완충 후 실사용 시간 2시간 미만',pts:1},{gubun:'배터리/안전',label:'배터리 물리적 이상 ⚠',criteria:'배터리 팽창, 이상 발열, 충전 끊김',pts:3},{gubun:'배터리/안전',label:'배터리 충전 불가',criteria:'배터리 충전 문제 (충전 안됨) 발생',pts:2},{gubun:'성능',label:'OS 지원 종료 — Win10',criteria:'2025년 10월 Windows 10 공식 지원 종료 · 보안 위험',pts:3},{gubun:'성능',label:'멀티태스킹 업무불가',criteria:'Office/브라우저 동시 사용 시 업무불가 상태 2주↑ 지속',pts:2},{gubun:'성능',label:'화상회의 끊김 반복',criteria:'Teams/Zoom/Webex 끊김 반복 (네트워크 문제 제외)',pts:1},{gubun:'성능',label:'저장공간 부족 지속',criteria:'여유공간 상시 부족, 정리 후에도 체감 성능 저하 지속',pts:1},{gubun:'경제성',label:'수리비 ≥ 신규가의 50%',criteria:'예상 수리비가 동급 신규 제품 가격의 50% 이상',pts:2},{gubun:'경제성',label:'수리 리드타임 5영업일 초과',criteria:'부품/센터 이슈로 5영업일↑ 예상',pts:1},{gubun:'경제성',label:'반복 유상수리 누적',criteria:'연간 유상 수리비 누적 ≥ 구매가의 20~30%',pts:2}];
+const CHECK_SCORES=ASSET_PRINT_ITEMS.map(i=>i.pts);
+const ASSET_CHECK_LABELS=ASSET_PRINT_ITEMS.map(i=>i.label);
+
+document.querySelectorAll('.asset-sub-tab').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    const subpanel=this.dataset.subpanel;
+    document.querySelectorAll('.asset-sub-tab').forEach(b=>{b.classList.remove('active');b.setAttribute('aria-selected','false');});
+    document.querySelectorAll('.asset-sub-panel').forEach(p=>{p.classList.remove('active');});
+    this.classList.add('active');this.setAttribute('aria-selected','true');
+    const subEl=document.getElementById('app-'+subpanel);
+    if(subEl)subEl.classList.add('active');
+  });
+});
+document.getElementById('assetGoToAssetView').addEventListener('click',function(){
+  document.querySelector('.asset-sub-tab[data-subpanel="asset-view"]').click();
+});
+
+let assetViewData=[];
+function assetViewFindKey(obj,candidates){const keys=Object.keys(obj);for(const c of candidates){const f=keys.find(k=>String(k).trim().includes(c));if(f)return f;}return null;}
+function assetViewIsChecked(val){if(val===null||val===undefined)return false;const s=String(val).trim();return s==='●'||s==='1'||s==='O'||s.toLowerCase()==='true'||s==='Y'||s==='예';}
+function assetViewGetStatus(score){return score>=7?'danger':score>=5?'warn':'safe';}
+document.getElementById('assetViewFileInput').addEventListener('change',e=>{if(e.target.files[0])assetViewLoadFile(e.target.files[0]);});
+const assetViewZone=document.getElementById('assetViewUploadZone');
+assetViewZone.addEventListener('dragover',e=>{e.preventDefault();assetViewZone.classList.add('dragover');});
+assetViewZone.addEventListener('dragleave',()=>assetViewZone.classList.remove('dragover'));
+assetViewZone.addEventListener('drop',e=>{e.preventDefault();assetViewZone.classList.remove('dragover');if(e.dataTransfer.files[0])assetViewLoadFile(e.dataTransfer.files[0]);});
+assetViewZone.addEventListener('click',()=>document.getElementById('assetViewFileInput').click());
+function assetViewLoadFile(file){
+  const loadingEl=document.createElement('div');loadingEl.id='assetViewLoading';loadingEl.className='status info';loadingEl.style.marginTop='12px';loadingEl.innerHTML='처리 중… <span class="loading"></span>';assetViewZone.parentNode.appendChild(loadingEl);
+  const reader=new FileReader();
+  reader.onerror=function(){loadingEl.remove();alert('파일을 읽을 수 없습니다. 엑셀 내보내기로 저장한 파일인지 확인해주세요.');};
+  reader.onload=function(e){
+    loadingEl.remove();
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      let ws=wb.Sheets[wb.SheetNames[0]];
+      const targetName=wb.SheetNames.find(n=>n==='전체 실사결과');
+      if(targetName)ws=wb.Sheets[targetName];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      let headerRow=0;
+      for(let i=0;i<raw.length;i++){const row=raw[i].map(c=>String(c));if(row.some(c=>c.includes('부서')||c.includes('사용자명'))){headerRow=i;break;}}
+      const json=XLSX.utils.sheet_to_json(ws,{defval:'',range:headerRow});
+      assetViewProcessData(json);
+    }catch(err){loadingEl.remove();alert('파일을 읽는 중 오류가 발생했습니다. 엑셀 내보내기로 저장한 파일인지 확인해주세요.\n'+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function assetViewProcessData(json){
+  if(!json.length){alert('데이터를 찾을 수 없습니다.');return;}
+  const s=json[0],keys=Object.keys(s);
+  const COL={no:assetViewFindKey(s,['No.','No']),dept:assetViewFindKey(s,['부서']),name:assetViewFindKey(s,['사용자명','사용자']),ip:assetViewFindKey(s,['IP','ip']),mfg:assetViewFindKey(s,['제조연월','제조']),years:assetViewFindKey(s,['사용년수','사용년']),gubun:assetViewFindKey(s,['구분']),os:assetViewFindKey(s,['운영체제','OS','os']),score:assetViewFindKey(s,['교체점수']),verdict:assetViewFindKey(s,['판정'])};
+  const checkCols=ASSET_CHECK_LABELS.map(label=>{const k=keys.find(kk=>String(kk).trim()===label||String(kk).trim().includes(label));return k||null;});
+  assetViewData=json.map((row,i)=>{
+    const no=COL.no!=null?row[COL.no]:i+1,dept=COL.dept?String(row[COL.dept]||''):'',name=COL.name?String(row[COL.name]||''):'',ip=COL.ip!=null?(typeof row[COL.ip]==='number'?String(row[COL.ip]):String(row[COL.ip]||'')):'',years=COL.years!=null?row[COL.years]:'',os=COL.os?String(row[COL.os]||''):'',verdictVal=COL.verdict?String(row[COL.verdict]||'').trim():'';
+    let scoreNum=null;if(COL.score!=null&&row[COL.score]!==''&&row[COL.score]!==undefined){scoreNum=Number(row[COL.score]);if(isNaN(scoreNum))scoreNum=null;}
+    const checks=checkCols.map(col=>col?assetViewIsChecked(row[col]):false);
+    if(scoreNum==null&&checks.length)scoreNum=checks.reduce((sum,on,idx)=>sum+(on?CHECK_SCORES[idx]:0),0);
+    if(scoreNum==null)scoreNum=0;
+    const status=verdictVal==='교체권고'?'danger':verdictVal==='모니터링'?'warn':verdictVal==='정상'?'safe':assetViewGetStatus(scoreNum);
+    return{no,dept,name,ip,years,os,score:scoreNum,status};
+  }).filter(r=>r.name||r.ip);
+  const depts=[...new Set(assetViewData.map(r=>r.dept).filter(Boolean))].sort();
+  document.getElementById('assetViewDeptFilter').innerHTML='<option value="">전체 부서</option>'+depts.map(d=>`<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  assetViewZone.style.display='none';
+  document.getElementById('assetViewSummaryCards').classList.add('visible');
+  document.getElementById('assetViewToolbar').classList.add('visible');
+  document.getElementById('assetViewTableWrap').classList.add('visible');
+  assetViewRenderSummary();assetViewRenderTable();
+}
+function assetViewRenderSummary(){
+  document.getElementById('assetViewCardTotal').textContent=assetViewData.length;
+  document.getElementById('assetViewCardDanger').textContent=assetViewData.filter(r=>r.status==='danger').length;
+  document.getElementById('assetViewCardWarn').textContent=assetViewData.filter(r=>r.status==='warn').length;
+  document.getElementById('assetViewCardSafe').textContent=assetViewData.filter(r=>r.status==='safe').length;
+}
+function assetViewRenderTable(){
+  const dept=document.getElementById('assetViewDeptFilter').value,statusF=document.getElementById('assetViewStatusFilter').value;
+  const filtered=assetViewData.filter(r=>(!dept||r.dept===dept)&&(!statusF||r.status===statusF));
+  document.getElementById('assetViewCountBadge').textContent=filtered.length+'건';
+  document.getElementById('assetViewFooterInfo').textContent='총 '+filtered.length+'건 (전체 '+assetViewData.length+'건)';
+  const tbody=document.getElementById('assetViewTableBody');
+  if(filtered.length===0){tbody.innerHTML='<tr class="empty-row"><td colspan="8">조건에 맞는 데이터가 없습니다.</td></tr>';return;}
+  tbody.innerHTML=filtered.map(r=>{
+    const statusCls=r.status==='danger'?'row-danger':r.status==='warn'?'row-warn':'',badgeCls='status-'+r.status,label=r.status==='danger'?'🔴 교체권고':r.status==='warn'?'🟠 모니터링':'🟢 정상';
+    return'<tr class="'+statusCls+'"><td>'+r.no+'</td><td class="left">'+escapeHtml(r.dept)+'</td><td class="left">'+escapeHtml(r.name)+'</td><td>'+escapeHtml(r.ip)+'</td><td>'+escapeHtml(r.years)+'</td><td>'+escapeHtml(r.os)+'</td><td>'+r.score+'</td><td><span class="status-badge '+badgeCls+'">'+escapeHtml(label)+'</span></td></tr>';
+  }).join('');
+}
+document.getElementById('assetViewDeptFilter').addEventListener('change',assetViewRenderTable);
+document.getElementById('assetViewStatusFilter').addEventListener('change',assetViewRenderTable);
+document.getElementById('assetViewReuploadBtn').addEventListener('click',function(){
+  assetViewData=[];
+  assetViewZone.style.display='';
+  document.getElementById('assetViewSummaryCards').classList.remove('visible');
+  document.getElementById('assetViewToolbar').classList.remove('visible');
+  document.getElementById('assetViewTableWrap').classList.remove('visible');
+  document.getElementById('assetViewDeptFilter').innerHTML='<option value="">전체 부서</option>';
+  document.getElementById('assetViewStatusFilter').value='';
+  document.getElementById('assetViewFileInput').value='';
+});
+
+let assetData=[], modalRowIdx=null;
+const IDX_YEARS=0, IDX_OS=10;
+const _now=new Date();
+const assetDateStr=`${_now.getFullYear()}.${String(_now.getMonth()+1).padStart(2,'0')}.${String(_now.getDate()).padStart(2,'0')}`;
+document.getElementById('assetTodayLabel').textContent=assetDateStr;
+document.getElementById('assetDateStr').textContent=assetDateStr;
+document.getElementById('assetFileInput').addEventListener('change',e=>{if(e.target.files[0])assetLoadFile(e.target.files[0]);});
+const assetZone=document.getElementById('assetUploadZone');
+document.getElementById('assetReuploadBtn').addEventListener('click',function(){
+  assetData=[];modalRowIdx=null;
+  assetZone.style.display='';
+  document.getElementById('assetToolbarHint').style.display='none';
+  document.getElementById('assetSummaryCards').classList.remove('visible');
+  document.getElementById('assetToolbar').classList.remove('visible');
+  document.getElementById('assetTableWrap').classList.remove('visible');
+  document.getElementById('assetFileInput').value='';
+});
+assetZone.addEventListener('dragover',e=>{e.preventDefault();assetZone.classList.add('dragover');});
+assetZone.addEventListener('dragleave',()=>assetZone.classList.remove('dragover'));
+assetZone.addEventListener('drop',e=>{e.preventDefault();assetZone.classList.remove('dragover');if(e.dataTransfer.files[0])assetLoadFile(e.dataTransfer.files[0]);});
+function assetFindKey(obj,candidates){const keys=Object.keys(obj);for(const c of candidates){const f=keys.find(k=>k.includes(c));if(f)return f;}return null;}
+function getAssetStatus(score){return score>=7?'danger':score>=5?'warn':'safe';}
+function getRowScore(r){return r.checks.reduce((s,on,i)=>s+(on?CHECK_SCORES[i]:0),0);}
+function assetLoadFile(file){
+  const loadingEl=document.createElement('div');loadingEl.id='assetLoading';loadingEl.className='status info';loadingEl.style.marginTop='12px';loadingEl.innerHTML='처리 중… <span class="loading"></span>';assetZone.parentNode.appendChild(loadingEl);
+  const reader=new FileReader();
+  reader.onerror=function(){loadingEl.remove();alert('파일을 읽을 수 없습니다.');};
+  reader.onload=e=>{
+    loadingEl.remove();
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      let headerRow=0;
+      for(let i=0;i<raw.length;i++){if(raw[i].map(c=>String(c)).some(c=>c.includes('부서')||c.includes('사용자명'))){headerRow=i;break;}}
+      assetProcessData(XLSX.utils.sheet_to_json(ws,{defval:'',range:headerRow}));
+    }catch(err){alert('파일을 읽는 중 오류가 발생했습니다.\n'+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function assetProcessData(json){
+  if(!json.length){alert('데이터를 찾을 수 없습니다.');return;}
+  const s=json[0];
+  const COL={dept:assetFindKey(s,['부서']),name:assetFindKey(s,['사용자명','사용자']),ip:assetFindKey(s,['IP','ip']),mfg:assetFindKey(s,['제조연월','제조']),years:assetFindKey(s,['사용년수','사용년']),os:assetFindKey(s,['운영체제','OS','os']),gubun:assetFindKey(s,['구분'])};
+  assetData=json.map((row,i)=>{
+    let ip=row[COL.ip]!==undefined?row[COL.ip]:'';if(typeof ip==='number')ip=String(ip);
+    let mfg=row[COL.mfg]!==undefined?row[COL.mfg]:'';if(typeof mfg==='number')mfg=String(mfg);
+    const years=row[COL.years]!==undefined&&row[COL.years]!==''?row[COL.years]:'';
+    const os=String(row[COL.os]||'');
+    const gubun=COL.gubun?String(row[COL.gubun]||''):'';
+    const checks=CHECK_SCORES.map(()=>false);
+    if(parseFloat(years)>=5)checks[IDX_YEARS]=true;
+    if(os.includes('10'))checks[IDX_OS]=true;
+    return{no:i+1,dept:String(row[COL.dept]||''),name:String(row[COL.name]||''),ip,mfg,years,os,gubun,checks};
+  }).filter(r=>r.name||r.ip);
+  const depts=[...new Set(assetData.map(r=>r.dept).filter(Boolean))].sort();
+  document.getElementById('assetDeptFilter').innerHTML='<option value="">전체 부서</option>'+depts.map(d=>`<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+  document.getElementById('assetDeptLabel').textContent=depts.length===1?` — ${depts[0]}`:'';
+  assetZone.style.display='none';
+  document.getElementById('assetToolbarHint').style.display='block';
+  document.getElementById('assetToolbar').classList.add('visible');
+  document.getElementById('assetTableWrap').classList.add('visible');
+  document.getElementById('assetSummaryCards').classList.add('visible');
+  assetRenderTable();
+  assetRenderSummary();
+}
+function assetRenderSummary(){
+  let danger=0,warn=0,safe=0;
+  for(let i=0;i<assetData.length;i++){const st=getAssetStatus(getRowScore(assetData[i]));if(st==='danger')danger++;else if(st==='warn')warn++;else safe++;}
+  document.getElementById('assetCardTotal').textContent=assetData.length;
+  document.getElementById('assetCardDanger').textContent=danger;
+  document.getElementById('assetCardWarn').textContent=warn;
+  document.getElementById('assetCardSafe').textContent=safe;
+}
+function assetRenderTable(){
+  const q=document.getElementById('assetSearchInput').value.toLowerCase();
+  const dept=document.getElementById('assetDeptFilter').value;
+  const os=document.getElementById('assetOsFilter').value;
+  const minY=document.getElementById('assetYearsFilter').value;
+  const statusF=document.getElementById('assetStatusFilter').value;
+  const filtered=assetData.filter(r=>{
+    const score=getRowScore(r),status=getAssetStatus(score);
+    return(!q||[r.dept,r.name,r.ip,r.os,r.gubun].some(v=>String(v).toLowerCase().includes(q)))&&(!dept||r.dept===dept)&&(!os||String(r.os).includes(os))&&(!minY||parseFloat(r.years)>=parseFloat(minY))&&(!statusF||status===statusF);
+  });
+  document.getElementById('assetCountBadge').textContent=`${filtered.length}건`;
+  document.getElementById('assetFooterInfo').textContent=`총 ${filtered.length}건 (전체 ${assetData.length}건)`;
+  const tbodyAsset=document.getElementById('assetTableBody');
+  if(filtered.length===0){tbodyAsset.innerHTML='<tr><td colspan="13" style="text-align:center;padding:24px;color:#6b7280;">조건에 맞는 데이터가 없습니다.</td></tr>';return;}
+  const MAX=10;
+  tbodyAsset.innerHTML=filtered.map(r=>{
+    const score=getRowScore(r),status=getAssetStatus(score),pct=Math.min(100,Math.round(score/MAX*100));
+    const barClr=status==='danger'?'#dc2626':status==='warn'?'#ea580c':'#16a34a';
+    const osCls=r.os.includes('11')?'badge-win11':r.os.includes('10')?'badge-win10':'badge-other';
+    const rowCls=status==='danger'?'row-danger':status==='warn'?'row-warn':'';
+    const sLabel=status==='danger'?'🔴 교체권고':status==='warn'?'🟠 모니터링':'🟢 정상';
+    const idx=assetData.indexOf(r);const yNum=parseFloat(r.years);
+    const manualChecked=r.checks.some((on,i)=>on&&i!==IDX_YEARS&&i!==IDX_OS);
+    return `<tr class="${rowCls}" data-idx="${idx}" onclick="assetOpenModal(${idx})"><td onclick="event.stopPropagation()"><input type="checkbox"></td><td style="font-family:\'JetBrains Mono\',monospace;font-size:0.77rem;color:#6b7280;">${r.no}</td><td>${escapeHtml(r.dept)}</td><td class="left" style="font-weight:500;">${escapeHtml(r.name)}</td><td style="font-family:\'JetBrains Mono\',monospace;">${escapeHtml(r.ip)}</td><td>${escapeHtml(r.mfg)}</td><td style="font-weight:${yNum>=5?700:400};color:${yNum>=5?'#dc2626':'inherit'}">${escapeHtml(r.years)}년</td><td>${escapeHtml(r.gubun||'-')}</td><td><span class="badge ${osCls}">${escapeHtml(r.os)}</span></td><td><div class="score-wrap"><div class="score-bar"><div class="score-fill" style="width:${pct}%;background:${barClr}"></div></div><span style="font-size:0.77rem;font-family:\'JetBrains Mono\',monospace;font-weight:600;color:${barClr}">${score}</span></div></td><td><span class="status-badge status-${status}">${sLabel}</span></td><td><span class="sign-box"></span></td><td style="font-size:0.77rem;color:#6b7280;">${manualChecked?'📋 체크완료':''}</td></tr>`;
+  }).join('');
+}
+document.getElementById('assetSearchInput').addEventListener('input',assetRenderTable);
+document.getElementById('assetDeptFilter').addEventListener('change',assetRenderTable);
+document.getElementById('assetOsFilter').addEventListener('change',assetRenderTable);
+document.getElementById('assetYearsFilter').addEventListener('change',assetRenderTable);
+document.getElementById('assetStatusFilter').addEventListener('change',assetRenderTable);
+document.getElementById('assetFilterReset').addEventListener('click',function(){document.getElementById('assetSearchInput').value='';document.getElementById('assetDeptFilter').value='';document.getElementById('assetOsFilter').value='';document.getElementById('assetYearsFilter').value='';document.getElementById('assetStatusFilter').value='';assetRenderTable();});
+document.getElementById('assetToggleAll').addEventListener('click',()=>{const boxes=document.querySelectorAll('#assetTableBody input[type=checkbox]');const any=[...boxes].some(b=>!b.checked);boxes.forEach(b=>b.checked=any);});
+document.getElementById('assetPrint').addEventListener('click',()=>{
+  const boxes=document.querySelectorAll('#assetTableBody input[type=checkbox]:checked');
+  if(boxes.length===1){
+    const tr=boxes[0].closest('tr');
+    const idx=tr?parseInt(tr.getAttribute('data-idx'),10):-1;
+    if(idx>=0&&assetData[idx]){
+      const r=assetData[idx];
+      const score=getRowScore(r);
+      const status=getAssetStatus(score);
+      const statusLabels={danger:'🔴 교체권고',warn:'🟠 모니터링',safe:'🟢 정상'};
+      const rowsHtml=ASSET_PRINT_ITEMS.map((item,i)=>{const checked=r.checks[i];return `<tr><td>${item.gubun}</td><td>${item.label}</td><td>${item.criteria}</td><td class="col-check">${checked?'●':''}</td><td class="col-score">${checked?item.pts:''}</td></tr>`;}).join('');
+      const totalRow=`<tr class="pcl-total"><td colspan="3" style="text-align:right;padding-right:12px;">합계 총점</td><td class="col-check"></td><td class="col-score">${score}</td></tr>`;
+      document.getElementById('assetPrintChecklist').innerHTML=`<div class="pcl-suptitle">노트북 교체대상 여부 체크리스트</div><div class="pcl-title">${escapeHtml(r.name)} — 교체 체크리스트</div><div class="pcl-info-grid"><span>부서: <b>${escapeHtml(r.dept)}</b></span><span>사용자명: <b>${escapeHtml(r.name)}</b></span><span>IP: <b>${escapeHtml(r.ip)}</b></span><span>구분: <b>${escapeHtml(r.gubun||'-')}</b></span><span>사용년수: <b>${escapeHtml(r.years)}년</b></span><span>운영체제: <b>${escapeHtml(r.os)}</b></span><span>작성일: <b>${assetDateStr}</b></span></div><div class="pcl-verdict-line">판정: ${statusLabels[status]}</div><table class="pcl-table"><colgroup><col class="col-gubun"><col class="col-label"><col class="col-crit"><col class="col-check"><col class="col-score"></colgroup><thead><tr><th>구분</th><th>체크 항목</th><th>기준</th><th class="col-check">체크</th><th class="col-score">점수</th></tr></thead><tbody>${rowsHtml}${totalRow}</tbody></table><div class="pcl-footer"><strong>판단 기준</strong><br>• 체크된 항목의 점수를 합산하여 총점 산정<br>• 3점 항목 : 장비 노후 또는 지원종료 등 교체 주요 사유<br>• 2점 항목 : 성능저하 또는 반복 장애 발생<br>• 총점 7점 이상 또는 주요 성능 문제 발생 시 교체 검토<br>담당자 서명: <span class="pcl-sign-line"></span> &nbsp;&nbsp; 검수일자: <span class="pcl-sign-line pcl-date"></span></div>`;
+      document.body.classList.add('asset-print-checklist-mode');
+      window.print();
+      document.body.classList.remove('asset-print-checklist-mode');
+      document.getElementById('assetPrintChecklist').innerHTML='';
+      return;
+    }
+  }
+  window.print();
+});
+window.assetOpenModal=function(idx){
+  modalRowIdx=idx;const r=assetData[idx];
+  document.getElementById('assetModalTitle').textContent=`${r.name} — 교체 체크리스트`;
+  document.getElementById('assetModalSubtitle').textContent=`${r.dept} · IP: ${r.ip} · 사용 ${r.years}년 · ${r.gubun||'-'} · ${r.os}`;
+  const cbs=document.querySelectorAll('#assetModalBody input[type=checkbox]');
+  cbs.forEach((cb,i)=>{cb.checked=r.checks[i]||false;cb.closest('.check-item').classList.toggle('checked',cb.checked);});
+  assetRecalcModal();
+  document.getElementById('assetModalOverlay').classList.add('open');
+  document.getElementById('assetModalOverlay').setAttribute('aria-hidden','false');
+};
+function assetCloseModal(){
+  if(modalRowIdx!==null&&assetData[modalRowIdx]){
+    const cbs=document.querySelectorAll('#assetModalBody input[type=checkbox]');
+    const cur=[...cbs].map(cb=>cb.checked);
+    const saved=assetData[modalRowIdx].checks||[];
+    if(cur.some((v,i)=>saved[i]!==v)&&!confirm('저장하지 않고 닫으시겠습니까?\n변경 내용이 반영되지 않습니다.'))return;
+  }
+  document.getElementById('assetModalOverlay').classList.remove('open');
+  document.getElementById('assetModalOverlay').setAttribute('aria-hidden','true');
+}
+document.getElementById('assetModalClose').addEventListener('click',assetCloseModal);
+document.getElementById('assetModalOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('assetModalOverlay'))assetCloseModal();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.getElementById('assetModalOverlay').classList.contains('open'))assetCloseModal();});
+function assetRecalcModal(){
+  const cbs=document.querySelectorAll('#assetModalBody input[type=checkbox]');let score=0;
+  cbs.forEach((cb,i)=>{cb.closest('.check-item').classList.toggle('checked',cb.checked);if(cb.checked)score+=CHECK_SCORES[i]||0;});
+  const status=getAssetStatus(score);
+  const colors={danger:'#dc2626',warn:'#ea580c',safe:'#16a34a'};
+  const labels={danger:'🔴 교체권고',warn:'🟠 모니터링 필요',safe:'🟢 정상 사용 가능'};
+  const rCls={danger:'result-danger',warn:'result-warn',safe:'result-safe'};
+  document.getElementById('assetModalScoreVal').textContent=`${score}점`;
+  document.getElementById('assetModalScoreVal').style.color=colors[status];
+  ['assetModalVerdict','assetModalFooterResult'].forEach(id=>{const el=document.getElementById(id);el.textContent=labels[status];el.className='modal-result '+rCls[status];});
+}
+document.querySelectorAll('#assetModalBody input[type=checkbox]').forEach(cb=>cb.addEventListener('change',assetRecalcModal));
+document.getElementById('assetResetChecks').addEventListener('click',()=>{document.querySelectorAll('#assetModalBody input[type=checkbox]').forEach(cb=>{cb.checked=false;cb.closest('.check-item').classList.remove('checked');});assetRecalcModal();});
+document.getElementById('assetSaveAndClose').addEventListener('click',()=>{
+  if(modalRowIdx===null)return;
+  assetData[modalRowIdx].checks=[...document.querySelectorAll('#assetModalBody input[type=checkbox]')].map(cb=>cb.checked);
+  document.getElementById('assetModalOverlay').classList.remove('open');
+  assetRenderTable();assetRenderSummary();
+});
+document.getElementById('assetExportExcel').addEventListener('click',()=>{
+  if(!assetData.length){alert('먼저 엑셀 파일을 업로드해주세요.');return;}
+  const CHECK_LABELS=ASSET_PRINT_ITEMS.map(i=>i.label);
+  const STATUS_LABELS={danger:'교체권고',warn:'모니터링',safe:'정상'};
+  const allRows=assetData.map(r=>{const score=getRowScore(r),status=getAssetStatus(score);const row={'No.':r.no,'부서':r.dept,'사용자명':r.name,'IP':r.ip,'제조연월':r.mfg,'사용년수':r.years,'구분':r.gubun||'','운영체제':r.os,'교체점수':score,'판정':STATUS_LABELS[status]};CHECK_LABELS.forEach((label,i)=>{row[label]=r.checks[i]?'●':'';});return row;});
+  const dangerRows=assetData.filter(r=>getAssetStatus(getRowScore(r))==='danger').map(r=>{const score=getRowScore(r);return{'No.':r.no,'부서':r.dept,'사용자명':r.name,'IP':r.ip,'제조연월':r.mfg,'사용년수':r.years,'구분':r.gubun||'','운영체제':r.os,'교체점수':score,'해당 항목':CHECK_LABELS.filter((_,i)=>r.checks[i]).join(', ')};});
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(allRows);
+  ws1['!cols']=[{wch:6},{wch:12},{wch:12},{wch:14},{wch:10},{wch:8},{wch:8},{wch:6},{wch:8},{wch:10},...CHECK_LABELS.map(()=>({wch:20}))];
+  XLSX.utils.book_append_sheet(wb,ws1,'전체 실사결과');
+  if(dangerRows.length){const ws2=XLSX.utils.json_to_sheet(dangerRows);ws2['!cols']=[{wch:6},{wch:12},{wch:12},{wch:14},{wch:10},{wch:8},{wch:8},{wch:6},{wch:8},{wch:55}];XLSX.utils.book_append_sheet(wb,ws2,'교체권고 대상');}
+  const ws3=XLSX.utils.json_to_sheet([{'구분':'전체 장비','대수':assetData.length},{'구분':'교체권고','대수':assetData.filter(r=>getAssetStatus(getRowScore(r))==='danger').length},{'구분':'모니터링','대수':assetData.filter(r=>getAssetStatus(getRowScore(r))==='warn').length},{'구분':'정상','대수':assetData.filter(r=>getAssetStatus(getRowScore(r))==='safe').length}]);
+  ws3['!cols']=[{wch:14},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws3,'요약');
+  const t=new Date();
+  XLSX.writeFile(wb,`PC실사결과_${t.getFullYear()}${String(t.getMonth()+1).padStart(2,'0')}${String(t.getDate()).padStart(2,'0')}.xlsx`);
+  const toast=document.getElementById('assetExportToast');
+  toast.textContent='다운로드가 시작되었습니다.';
+  toast.style.display='inline';
+  setTimeout(function(){toast.textContent='';toast.style.display='none';},2500);
+});
+</script>
+</body>
+</html>
